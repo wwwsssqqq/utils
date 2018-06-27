@@ -1,160 +1,277 @@
 /**
- * 模块工具函数库
+ * @工具函数库
+ * @date:2016-5-14
  */
-/**
- * 日期格式转换
- */
-    //1. '3-6'=>['3:00','6:00']
-const timeToArr=R.split('-');
-const timeFormat=R.map(time=>time+':00');
-export const changeTimeToArr=R.compose(timeFormat,timeToArr);
-/*export const changeTime=R.compose(R.join('-'),timeFormat,timeToArr);*/
-export const changeTime = R.compose(
-    R.append(':00'),
-    R.replace('-',':00-'),
-);
+import hasOwn from '../var/hasOwnProperty';
+import 'whatwg-fetch';//fetch polyfill
 
-//日期转换
-/* eslint no-confusing-arrow: 0 */
-const datePad=n => n < 10 ? `0${n}` : n;
-const datePadPhone=n => n < 8 ? n+16 : n-8;//手机时间修正
-const isZHTimeFn=()=>(new Date("2018-01-01T23:01:01")).getUTCHours()===15;//是否是中国东8区时间
-export const formatDate=date=>`${date.getFullYear()}-${datePad(date.getMonth() + 1)}-${datePad(date.getDate())}`;
-export const formatTime=formatStr=>date=>{
-  const isZHTime=isZHTimeFn();
-  if (formatStr === 'HH') {
-    return isZHTime?`${datePad(date.getHours())}`:`${datePad(datePadPhone(date.getHours()))}`;
-  }
-  if (formatStr === 'mm') {
-    return `${datePad(date.getMinutes())}`;
-  }
-  
-  return isZHTime?`${datePad(date.getHours())}:${datePad(date.getMinutes())}`:`${datePad(datePadPhone(date.getHours()))}:${datePad(date.getMinutes())}`;
-};
+//服务器渲染才用到
+/*import nodeFetch from 'node-fetch';
 
-//GMT格式时间格式化
-export const formatTimeGMT=formatStr=>date=>{
-  if (formatStr === 'HH') {
-    return `${datePad(date.getHours())}`;
-  }
-  if (formatStr === 'mm') {
-    return `${datePad(date.getMinutes())}`;
-  }
-  
-  return `${datePad(date.getHours())}:${datePad(date.getMinutes())}`;
-};
+//node环境下使用node-fetch替换原生window.fetch
+let fetchApi=nodeFetch;
+try {
+  if (typeof window!=='undefined')　fetchApi = window.fetch;
+}catch (e){}*/
 
-// 设置移动端不同设备适配
-export const setFontSize = ()=>{
-  let html = document.documentElement;
-  
-  // 1rem = 10px  iphone6.width = 375px
-  if (html.getBoundingClientRect().width >= 1024) {
-    window.rem = html.getBoundingClientRect().width / 102.4;
-    html.style.fontSize = window.rem + 'px';
-  }else if (html.getBoundingClientRect().width > 768 && html.getBoundingClientRect().width <1024) {
-    window.rem = html.getBoundingClientRect().width / 76.8;
-    html.style.fontSize = window.rem + 'px';
-  } else if(html.getBoundingClientRect().width <= 768
-    && html.getBoundingClientRect().width >= 375){
-    window.rem = html.getBoundingClientRect().width / 37.5;
-    html.style.fontSize = window.rem + 'px';
-  } else{
-    window.rem = html.getBoundingClientRect().width / 32;
-    html.style.fontSize = window.rem + 'px';
-  }
-}
-
-//antd-mobile　picker数据获取
-export const getPickerValue=pickerKey=>R.compose(
-    R.prop('label'),
-    R.find(R.propEq('value',pickerKey)),
-    R.head,
-);
-export const getPickerKey=pickerValue=>R.compose(
-    R.prop('value'),
-    R.find(R.propEq('label',pickerValue)),
-    R.head,
-);
-
-//计算字符串长度
-export const getStrLength = str=>str.replace(/[\u0391-\uFFE5]/g,"aa").length;
+let fetchApi = window.fetch;
 
 /**
- * 按角色跳转逻辑
- * 返回{targetUrl,rolesUrl}
- * targetUrl:需要跳转到的路由，rolesUrl：角色的根路由
+ * fetch异部获取数据
+ * 使用时注意：
+ * 1.是否需要设置请求头headers　'Content-Type':'application/x-www-form-urlencoded',
+ * 2.发送数据body是否需要序列化，可以使用param方法
+ * @param url {String}
+ * @param opts [Object]
  */
-/*
-import Roles from '../config/Roles';
-export const getRolesUrl=(rolesIdArr)=>{
-  const rolesLists = R.prop('rolesId')(Roles);//角色列表
-  const rolesIndex = R.map(uRole => R.findIndex(roles => R.contains(uRole)(roles))(rolesLists))(rolesIdArr);
-  const index = R.find(item => R.lte(0)(item))(rolesIndex);
+export const fetch = (url, opts = {}) => fetchApi(url, Object.assign({ method: 'get' }, opts))
+    .then(response => {
+      if (200 <= response.status && response.status < 300) {
+        if (opts.type === 'text') {
+          return response.text();
+        }
+        
+        return response.json();
+      } else {
+        //return {code:response.status,error:response.statusText};
+        /*const err = new Error(response.statusText);
+        err.response = response;
+        
+        throw err;*/
+        /*const e=new Error('fetch data err!');
+        e.error=response.statusText;
+        e.code=response.status;*/
+        throw {code:response.status,error:response.statusText};
+      }
+    });
+
+/**
+ * 生成随机字符串
+ * @param len　[number=32]
+ * @returns {string}
+ */
+export const randomStr = (len = 42) => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let str = '';
   
-  return R.nth(index)(R.prop('rolesUrl')(Roles));
+  for (; len > 0; len--) {
+    str += chars.charAt(Math.trunc(Math.random() * chars.length));
+  }
+  
+  return str;
 };
-export const getJumpUrl=(visitorUrl,userInfo,rolesUrlArr,loginUrl)=>{
-  //排除非受控路由
-  if (visitorUrl&&!R.contains(visitorUrl,rolesUrlArr)) {
-    return {};
+
+/**
+ * 检测数据类型
+ * @param obj
+ * @returns {string}
+ */
+export const type = obj => {
+  //null,undefinded
+  if (obj == null) {
+    return obj + "";
   }
   
-  //用户未登录重置路由为登录页
-  if (!userInfo) {
-    return {targetUrl:loginUrl};
+  let type = typeof obj;
+  
+  if (type === 'object') {
+    type = Object.prototype.toString.call(obj).slice(8, -1).toLocaleLowerCase();
   }
   
-  const rolesLists = R.prop('rolesId')(Roles);//角色列表
-  const rolesIndex = R.map(uRole => R.findIndex(roles => R.contains(uRole)(roles))(rolesLists))(userInfo.rolesId);
-  const index = R.find(item => R.lte(0)(item))(rolesIndex);
+  return type;
+};
+
+/**
+ * 纯对象判断
+ * @param obj
+ * @returns {*|boolean}
+ */
+export const isPlainObject = obj => obj.constructor && obj.constructor.name === 'Object' && obj.constructor.prototype.hasOwnProperty('hasOwnProperty');
+
+/**
+ * 对象参数序列化
+ * @param obj {Object}
+ * @returns {string}
+ */
+export const param = obj => {
+  const returnData = [];
   
-  if (index !== undefined) {
-    const rolesUrl = R.nth(index)(R.prop('rolesUrl')(Roles));
-    const url={};
+  // If an array was passed in, assume that it is an array of form elements.
+  if (Array.isArray(obj) || !isPlainObject(obj)) {
+    // Serialize the form elements
+    for (let item of obj) {
+      add(item.name, item.value, returnData);
+    }
+  } else {
+    // If traditional, encode the 'old' way (the way 1.3.2 or older
+    // did it), otherwise encode params recursively.
+    for (let key of Object.keys(obj)) {
+      buildParams(key, obj[key], add, returnData);
+    }
+  }
+  
+  // Return the resulting serialization
+  return returnData.join('&');
+  
+  /*param辅助函数*/
+  function add(key, valueOrFunction, data) {
+    // If value is obj function, invoke it and use its return value
+    const value = typeof valueOrFunction === 'function'
+        ? valueOrFunction(): valueOrFunction;
     
-    //角色根径下的子路径不需要跳转
-    if (!R.contains(visitorUrl, rolesUrl)) {
-      url.targetUrl=rolesUrl;
+    data.push(encodeURIComponent(key) + '=' + encodeURIComponent(value === null ? '': value));
+  }
+  
+  function buildParams(key, value, add, data) {
+    const isBracket = /[]$/.test(key);
+    
+    if (Array.isArray(value)) {
+      // Serialize array navs.
+      // 序列化数组项
+      for (let [i, v] of value.entries()) {
+        if (isBracket) {
+          // Treat each array navs as a scalar.
+          add(key, v, data);
+        } else {
+          // Item is non-scalar (array or object), encode its numeric index.
+          buildParams(key + '[' + (typeof v === 'object' && v !== null ? i: '') + ']', v, add, data);
+        }
+      }
+    } else if (typeof value === 'object' && value !== null) {
+      // Serialize object navs.
+      for (let name of Object.keys(value)) {
+        buildParams(key + '[' + name + ']', value[name], add, data);
+      }
+    } else {
+      // Serialize scalar navs.
+      add(key, value, data);
+    }
+  }
+};
+
+/**
+ * 函数节流生成器
+ * 应用场景：鼠标移动，mousemove事件；DOM元素动态定位，window对象的resizet和scroll事件
+ * @param fn [Function] -节流函数
+ * @param delay {Number} - 控制函数连续调用的频率
+ * @returns {Function}
+ */
+export const throttle = (fn, delay) => {
+  let timer = null;
+  
+  return function (...arg) {
+    timer && clearTimeout(timer);
+    timer = setTimeout(() => {
+      fn.apply(this, arg);
+    }, delay);
+  }
+};
+
+/**
+ * 高频执行函数防抖生成器，
+ * @param fn {function} - 绑定需要防抖函数
+ * @param wait {Number} -空闲时间间隔，空闲时间必须大于或等于此值时才会执行调用函数
+ * @param immediate [Boolean] - 无此参数或此参数为false时，执行函数在空闲时间间隔之后执行；相反刚在之前执行。
+ * @returns {Function}
+ */
+export const debounce = (fn, wait, immediate) => {
+  let timeout;
+  
+  return function (...args) {
+    clearTimeout(timeout);
+    
+    if (immediate && !timeout) {
+      fn.apply(this, args);
     }
     
-    url.rolesUrl=rolesUrl;
-    return url;
-  } else {
-    //没有登录权限
-    return {targetUrl:loginUrl};
+    timeout = setTimeout(() => {
+      timeout = null;
+      if (!immediate) {
+        fn.apply(this, args);
+      }
+    }, wait);
+  };
+};
+
+/**
+ * 解析字符串形式的对象为js对象，如：{name:'ruying'}
+ * @param optsStr {String}
+ * @returns {*}
+ */
+export const parseOptions = optsStr => {
+  if (optsStr) {
+    try {
+      return (new Function('return JSON.parse(JSON.stringify(' + optsStr + '));'))();
+    } catch (e) {
+      throw e;
+    }
   }
 };
-*/
 
-/*
-export const jumpByRoles = (userInfo, pushAction,visitorUrl,ctrUrl) => {
-  //不受控网址直接返回
-  console.log(visitorUrl);
-  if (visitorUrl&&!R.contains(visitorUrl,ctrUrl)) {
-    return;
+/**
+ * 生成唯一id值
+ * @param prfix [String='r']
+ * @returns {string}
+ */
+let id = 0;
+export const guid = (prfix = '') => `${prfix}_${+(new Date()) + '_' + id++}`;
+
+/**
+ * 中划线形式单词转换为驼峰式单词
+ * @param str {String}
+ * @returns {String}
+ */
+export const camelCase = str => {
+  str = str.toLowerCase();
+  
+  const keyArr = str.split('-');
+  
+  if (keyArr.length === 1) {
+    return str;
   }
   
+  return keyArr.reduce((prevItem, nextItem) => prevItem + nextItem.charAt(0).toLocaleUpperCase() + nextItem.slice(1));
+};
+
+/**
+ * A simple javascript utility for conditionally joining classNames together.
+ * http://jedwatson.github.io/classnames
+ * @returns {string}
+ */
+export const classnames = (...args) => {
+  const classes = [];
   
-  if (!userInfo) {
-    return pushAction('/');
-  }
-  
-  const userRolseIs = userInfo.rolesId;
-  const rolesLists = R.prop('rolesId')(Roles);//角色列表
-  const rolesIndex = R.map(uRole => R.findIndex(roles => R.contains(uRole)(roles))(rolesLists))(userRolseIs);
-  
-  const index = R.find(item => R.lte(0)(item))(rolesIndex);
-  
-  if (index !== undefined) {
-    const rolesUrl = R.nth(index)(R.prop('rolesUrl')(Roles));
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg) continue;
     
-    //不是本根径下跳转
-    //R.contains(visitorUrl,rolesUrl)||pushAction(rolesUrl);
-    return rolesUrl;
-  } else {
-    pushAction('/');
+    const argType = typeof arg;
     
-    return false;
+    if (argType === 'string' || argType === 'number') {
+      classes.push(arg);
+    } else if (Array.isArray(arg)) {
+      classes.push(classnames.apply(null, arg));
+    } else if (argType === 'object') {
+      for (let key in arg) {
+        if (hasOwn.call(arg, key) && arg[key]) {
+          classes.push(key);
+        }
+      }
+    }
   }
-};*/
+  
+  return classes.join(' ');
+};
+
+
+/**
+ * 函数记录器
+ * @param arr
+ */
+export const recFn=arr=>fnName=>arr.push(fnName);
+
+/**
+ * 函数是否已记录检查
+ * @param arr
+ */
+export const hasRecFn=arr=>fnName=>arr.includes(fnName);
